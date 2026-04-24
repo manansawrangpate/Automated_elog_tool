@@ -301,7 +301,7 @@ def predict(
     # Also require: no issue keywords fired, no contingency flag, not very short text
     # (short logs are harder to classify and should be reviewed)
     df["clf_confident_clear"] = (
-        (proba < 0.05)
+        (proba < 0.01)
         & (df.get("feat_any_issue_keyword", pd.Series(0, index=df.index)) == 0)
         & (df.get("stage1_label", pd.Series(0, index=df.index)) != 1)
         & (df.get("feat_word_count", pd.Series(999, index=df.index)) >= 8)

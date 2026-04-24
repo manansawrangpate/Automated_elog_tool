@@ -23,8 +23,8 @@ y = df_tr['is_issue'].values
 w = min((y==0).sum() / max((y==1).sum(), 1), 50)
 print('Class weight ratio: %.0f:1' % w)
 
-base = LogisticRegression(C=1.0, class_weight={0:1, 1:w}, max_iter=1000, solver='lbfgs', random_state=42)
-clf = CalibratedClassifierCV(base, method='isotonic', cv=3)
+base = LogisticRegression(C=1.0, class_weight={0:1, 1:w}, max_iter=1000, solver='saga', n_jobs=1, random_state=42)
+clf = CalibratedClassifierCV(base, method='sigmoid', cv=3)
 
 cv_r, cv_a = [], []
 for fold, (ti, vi) in enumerate(TimeSeriesSplit(n_splits=4).split(X)):
