@@ -6,7 +6,7 @@ logging.disable(logging.CRITICAL)
 import pandas as pd, numpy as np, joblib
 from pipeline import TriagePipeline
 
-with open('/tmp/frames.pkl', 'rb') as f:
+with open('frames.pkl', 'rb') as f:
     frames = pickle.load(f)
 
 clf     = joblib.load('models_6mo/classifier.joblib')
@@ -40,9 +40,9 @@ out_cols = ['source_month','EVENTDATE','DESCRIPTION','PERSONGROUP','LDTEXT',
 out_cols = [c for c in out_cols if c in results.columns]
 
 from pathlib import Path
-Path('/mnt/user-data/outputs').mkdir(exist_ok=True)
+Path('outputs').mkdir(exist_ok=True)
 
-with pd.ExcelWriter('/mnt/user-data/outputs/6month_eval_results.xlsx', engine='openpyxl') as writer:
+with pd.ExcelWriter('outputs/6month_eval_results.xlsx', engine='openpyxl') as writer:
     results[out_cols].to_excel(writer, sheet_name='All (Val+Test)', index=False)
     results[results['triage_decision']=='FLAG'][out_cols].to_excel(writer, sheet_name='Flagged', index=False)
     results[results['triage_decision']=='CLEAR'][out_cols].to_excel(writer, sheet_name='Cleared', index=False)

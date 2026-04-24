@@ -11,7 +11,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.model_selection import TimeSeriesSplit
 from sklearn.metrics import roc_auc_score, classification_report
 
-with open('/tmp/frames.pkl', 'rb') as f:
+with open('frames.pkl', 'rb') as f:
     frames = pickle.load(f)
 
 train_months = ['2025-10','2025-11','2025-12','2026-01']

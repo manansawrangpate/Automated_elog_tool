@@ -8,12 +8,36 @@ from data_loader import load_month_pair
 from features import engineer_features
 
 all_cfg = [
-    ('2025-10','/mnt/user-data/uploads/2025-10_RAW.csv','/mnt/user-data/uploads/2025-10_SORTED.xlsx'),
-    ('2025-11','/mnt/user-data/uploads/2025-11_RAW.csv','/mnt/user-data/uploads/2025-11_SORTED.xlsx'),
-    ('2025-12','/mnt/user-data/uploads/2025-12_RAW.csv','/mnt/user-data/uploads/2025-12_SORTED.xlsx'),
-    ('2026-01','/mnt/user-data/uploads/2026-01_RAW.csv','/mnt/user-data/uploads/2026-01_SORTED.xlsx'),
-    ('2026-02','/mnt/user-data/uploads/2026-02_RAW.csv','/mnt/user-data/uploads/2026-02_SORTED.xlsx'),
-    ('2026-03','/mnt/user-data/uploads/2026-03_RAW.csv','/mnt/user-data/uploads/2026-03_SORTED.xlsx'),
+    (
+        '2025-10',
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2025-10 RAW.csv",
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2025-10 SORTED.xlsx"
+    ),
+    (
+        '2025-11',
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2025-11 RAW.csv",
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2025-11 SORTED.xlsx"
+    ),
+    (
+        '2025-12',
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2025-12 RAW.csv",
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2025-12 SORTED.xlsx"
+    ),
+    (
+        '2026-01',
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2026-01 RAW.csv",
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2026-01 SORTED.xlsx"
+    ),
+    (
+        '2026-02',
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2026-02 RAW.csv",
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2026-02 SORTED.xlsx"
+    ),
+    (
+        '2026-03',
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2026-03 RAW.csv",
+        r"C:\Users\Sawrangpatem\OneDrive - York Region\Documents\github\elog_ui\Training Data\2026-03 SORTED.xlsx"
+    ),
 ]
 
 frames = {}
@@ -24,6 +48,6 @@ for m, r, s in all_cfg:
     frames[m] = df
     print('%s: %d rows %d issues (%.1f%%)' % (m, len(df), int(df['is_issue'].sum()), 100*df['is_issue'].mean()))
 
-with open('/tmp/frames.pkl', 'wb') as f:
+with open('frames.pkl', 'wb') as f:
     pickle.dump(frames, f)
 print('Frames saved to /tmp/frames.pkl')
