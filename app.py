@@ -19,18 +19,17 @@ st.title("Elogbook Sorting Tool")
 tab1, tab2 = st.tabs(["Run triage", "Train model"])
 
 with tab1:
-    with tab1:
     st.write("Upload the RAW elogbook export and download the predicted sorted issues.")
     
     st.info(
         'Please ensure the uploaded elog file is renamed as "YYYY-MM RAW" '
         'Example: "2026-04 RAW"'
     )
-     
+
     raw_file = st.file_uploader(
-    "Choose a RAW elogbook file (.csv)",
-    type=["csv"],
-    key="triage_raw",
+        "Choose a RAW elogbook file (.csv)",
+        type=["csv"],
+        key="triage_raw",
     )
 
     if raw_file is not None:
