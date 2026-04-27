@@ -114,12 +114,23 @@ with tab1:
 
             except Exception as e:
                 st.exception(e)
-
+                
 with tab2:
     st.write(
         "Upload a RAW + SORTED pair to evaluate the current model and see "
         "which logs were missed or incorrectly flagged."
     )
+
+    st.info(
+        'RAW file format should be "YYYY-MM RAW" '
+        'Example: "2026-04 RAW"'
+    )
+
+    st.info(
+        'SORTED file format should be "YYYY-MM SORTED" '
+        'Example: "2026-04 SORTED"'
+    )
+
 
     col1, col2 = st.columns(2)
     with col1:
