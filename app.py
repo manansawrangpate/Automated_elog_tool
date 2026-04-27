@@ -9,177 +9,93 @@ from io import BytesIO
 
 warnings.filterwarnings("ignore")
 logging.disable(logging.CRITICAL)
-
 sys.path.insert(0, str(Path(__file__).parent))
 
 st.set_page_config(page_title="Elogbook Sorting Tool")
-
 st.title("Elogbook Sorting Tool")
 
-tab1, tab2 = st.tabs(["Run triage", "Train model"])
+tab1, tab2 = st.tabs(["Run triage", "Evaluate"])
 
+# ── TAB 1 ──────────────────────────────────────────────────────────────────
 with tab1:
     st.write("Upload the RAW elogbook export and download the predicted sorted issues.")
-    
-    st.info(
-        'Please ensure the uploaded elog file is renamed as "YYYY-MM RAW" '
-        'Example: "2026-04 RAW"'
-    )
+    st.info("File must be named **YYYY-MM RAW.xlsx** — e.g. `2026-04 RAW.xlsx`")
 
-    raw_file = st.file_uploader(
-        "Choose a RAW elogbook file (.csv)",
-        type=["csv"],
-        key="triage_raw",
-    )
+    raw_file = st.file_uploader("Choose a RAW elogbook file (.xlsx)", type=["xlsx"], key="run_raw")
 
-    if raw_file is not None:
+    if raw_file:
         st.success("File uploaded successfully!")
-
         if st.button("Run triage"):
             try:
-                from features  import engineer_features, normalize_text
-                from pipeline  import TriagePipeline
+                import pipeline
+                prefix  = raw_file.name.replace(" RAW.xlsx", "").replace(".xlsx", "")
+                df      = pd.read_excel(raw_file)
+                results = pipeline.run(df)
 
-                MODEL_DIR = Path(__file__).parent / "models_6mo"
-
-                if not MODEL_DIR.exists():
-                    st.error(
-                        "No trained model found. Make sure the models_6mo/ folder "
-                        "is in the same directory as app.py."
-                    )
-                    st.stop()
-
-                prefix = raw_file.name.replace("_RAW.csv", "").replace(".csv", "")
-
-                with st.spinner("Running triage…"):
-                    with tempfile.TemporaryDirectory() as tmp:
-                        tmp = Path(tmp)
-                        raw_path = tmp / raw_file.name
-                        raw_path.write_bytes(raw_file.read())
-
-                        df = pd.read_csv(str(raw_path), dtype={"LOCATION": str})
-                        df["is_issue"] = -1
-                        df["source_month"] = prefix
-                        df = engineer_features(df)
-
-                        pipe    = TriagePipeline.from_model_dir(str(MODEL_DIR))
-                        results = pipe.run(df)
-
-                flagged = results[results["triage_decision"] == "FLAG"].copy()
-                n_total  = len(results)
-                n_flagged = len(flagged)
-                n_cleared = n_total - n_flagged
-
-                st.write(
-                    f"**{n_flagged}** predicted issues · "
-                    f"**{n_cleared}** routine · "
-                    f"**{n_total}** total"
-                )
-
-                # Build output Excel matching SORTED format:
-                # one sheet per site (DESCRIPTION), containing flagged logs only,
-                # sorted by date then confidence score
-                buf = BytesIO()
-
-                with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-
-                    # Sheet 1: All predicted issues (most useful single view)
-                    summary_cols = [c for c in [
-                        "EVENTDATE", "DESCRIPTION", "PERSONGROUP",
-                        "LDTEXT", "triage_score", "triage_reason",
-                        "matching_keywords", "clf_proba", "triage_stage",
-                    ] if c in flagged.columns]
-
-                    (flagged[summary_cols]
-                        .sort_values(["DESCRIPTION", "EVENTDATE"], na_position="last")
-                        .to_excel(writer, sheet_name="All Predicted Issues", index=False))
-
-                    # One sheet per site — mirrors the real SORTED structure
-                    if "DESCRIPTION" in flagged.columns:
-                        sites = sorted(flagged["DESCRIPTION"].dropna().unique())
-                        for site in sites:
-                            site_df = flagged[flagged["DESCRIPTION"] == site][summary_cols]
-                            site_df = site_df.sort_values("EVENTDATE", na_position="last")
-
-                            # Truncate sheet name to Excel 31-char limit
-                            sheet_name = str(site)[:31]
-                            site_df.to_excel(writer, sheet_name=sheet_name, index=False)
+                n_flag  = (results["triage_decision"] == "FLAG").sum()
+                n_clear = (results["triage_decision"] == "CLEAR").sum()
+                st.write(f"**{n_flag}** predicted issues · **{n_clear}** routine · **{len(results)}** total")
 
                 st.download_button(
                     label="Download sorted results",
-                    data=buf.getvalue(),
-                    file_name=f"{prefix}_SORTED_predicted.xlsx",
+                    data=pipeline.to_excel(results, prefix),
+                    file_name=f"{prefix} SORTED predicted.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 )
-
             except Exception as e:
                 st.exception(e)
-                
+
+# ── TAB 2 ──────────────────────────────────────────────────────────────────
 with tab2:
-    st.write(
-        "Upload a RAW + SORTED pair to evaluate the current model and see "
-        "which logs were missed or incorrectly flagged."
-    )
-
+    st.write("Upload a RAW + SORTED pair to check accuracy.")
     st.info(
-        'RAW file format should be "YYYY-MM RAW" '
-        'Example: "2026-04 RAW"'
+        "RAW file must be named **YYYY-MM RAW.xlsx** — e.g. `2026-04 RAW.xlsx`\n\n"
+        "SORTED file must be named **YYYY-MM SORTED.xlsx** — e.g. `2026-04 SORTED.xlsx`"
     )
-
-    st.info(
-        'SORTED file format should be "YYYY-MM SORTED" '
-        'Example: "2026-04 SORTED"'
-    )
-
 
     col1, col2 = st.columns(2)
     with col1:
-        train_raw = st.file_uploader(
-            "RAW elogbook export (.csv)",
-            type=["csv"],
-            key="train_raw",
-        )
+        eval_raw    = st.file_uploader("RAW file (.xlsx)",          type=["xlsx"], key="eval_raw")
     with col2:
-        train_sorted = st.file_uploader(
-            "SORTED answer key (.xlsx)",
-            type=["xlsx"],
-            key="train_sorted",
-        )
+        eval_sorted = st.file_uploader("SORTED answer key (.xlsx)", type=["xlsx"], key="eval_sorted")
 
-    if train_raw and train_sorted:
+    if eval_raw and eval_sorted:
         st.success("Both files uploaded!")
-
-        if st.button("Evaluate model"):
+        if st.button("Evaluate"):
             try:
-                from data_loader import load_month_pair
-                from features    import engineer_features
-                from pipeline    import TriagePipeline
+                import pipeline
+                from rapidfuzz import fuzz
+                from openpyxl import load_workbook
+                import re
 
-                MODEL_DIR = Path(__file__).parent / "models_6mo"
+                df = pd.read_excel(eval_raw)
+                df["is_issue"] = 0
+                df["date_str"] = pd.to_datetime(df["EVENTDATE"], errors="coerce").dt.strftime("%Y-%m-%d")
 
-                if not MODEL_DIR.exists():
-                    st.error("No trained model found in models_6mo/. Run training via command line first.")
-                    st.stop()
+                with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+                    tmp.write(eval_sorted.read())
+                    tmp_path = tmp.name
 
-                prefix = train_raw.name.replace("_RAW.csv", "").replace(".csv", "")
+                wb = load_workbook(tmp_path, read_only=True)
+                ws = wb["Sheet1"]
+                for row in ws.iter_rows(values_only=True):
+                    if not row[3]: continue
+                    t = str(row[3]).replace("_x000D_", " ").replace("\r\n", " ").replace("\n", " ")
+                    parts = re.split(r"[\u2014]{5,}", t)
+                    body = (parts[1].strip() if len(parts) >= 2 else t)[:80]
+                    date_str = row[2].strftime("%Y-%m-%d") if hasattr(row[2], "strftime") else str(row[2])[:10]
+                    cands = df[df["date_str"] == date_str]
+                    best_idx, best_score = None, 0
+                    for idx, cand in cands.iterrows():
+                        score = fuzz.partial_ratio(body[:60], str(cand["LDTEXT"] or "").lower()[:80])
+                        if score > best_score:
+                            best_score, best_idx = score, idx
+                    if best_idx is not None and best_score >= 75:
+                        df.loc[best_idx, "is_issue"] = 1
 
-                with st.spinner("Loading and evaluating…"):
-                    with tempfile.TemporaryDirectory() as tmp:
-                        tmp = Path(tmp)
-                        raw_path    = tmp / train_raw.name
-                        sorted_path = tmp / train_sorted.name
-                        raw_path.write_bytes(train_raw.read())
-                        sorted_path.write_bytes(train_sorted.read())
-
-                        df = load_month_pair(str(raw_path), str(sorted_path))
-                        df["source_month"] = prefix
-                        df = engineer_features(df)
-
-                        pipe    = TriagePipeline.from_model_dir(str(MODEL_DIR))
-                        results = pipe.run(df)
-
-                y_true = df["is_issue"].values
-                y_pred = (results["triage_decision"] == "FLAG").astype(int).values
+                results = pipeline.run(df)
+                y_true  = df["is_issue"].values
+                y_pred  = (results["triage_decision"] == "FLAG").astype(int).values
 
                 tp = int(((y_true==1) & (y_pred==1)).sum())
                 fp = int(((y_true==0) & (y_pred==1)).sum())
@@ -189,81 +105,35 @@ with tab2:
                 precision = round(tp / max(tp+fp, 1), 4)
 
                 c1, c2, c3, c4 = st.columns(4)
-                c1.metric("Recall",    f"{recall:.4f}", help="% of real issues caught")
-                c2.metric("Precision", f"{precision:.4f}", help="% of flags that are real issues")
-                c3.metric("Missed (FN)", fn,
-                          delta=f"{'⚠️ CRITICAL' if fn > 0 else '✅ None'}",
+                c1.metric("Recall",           f"{recall:.4f}")
+                c2.metric("Precision",         f"{precision:.4f}")
+                c3.metric("Missed (FN)",        fn,
+                          delta="CRITICAL" if fn > 0 else "None",
                           delta_color="inverse")
                 c4.metric("False alarms (FP)", fp)
 
                 if fn > 0:
-                    st.error(f"⚠️ {fn} real issue(s) were MISSED by the pipeline.")
+                    st.error(f" {fn} real issue(s) missed — add their keywords to KEYWORDS in pipeline.py")
                 else:
-                    st.success("✅ No issues missed — perfect recall on this month.")
+                    st.success(" No issues missed.")
 
-                OUTPUT_COLS = [c for c in [
-                    "EVENTDATE", "DESCRIPTION", "PERSONGROUP", "LDTEXT",
-                    "triage_decision", "triage_stage", "triage_score",
-                    "triage_reason", "matching_keywords", "clf_proba", "is_issue",
-                ] if c in results.columns]
+                COLS = [c for c in ["EVENTDATE", "DESCRIPTION", "PERSONGROUP", "LDTEXT",
+                                    "matched_keyword", "is_issue", "triage_decision"]
+                        if c in results.columns]
 
-                if fn > 0:
-                    st.subheader("Missed issues (false negatives)")
-                    st.caption("These are real issues the model failed to flag. Add their key phrases to features.py → CRITICAL_PATTERNS.")
-                    missed = results[(y_true==1) & (y_pred==0)][OUTPUT_COLS]
-                    st.dataframe(missed.reset_index(drop=True), use_container_width=True)
-
-                t1, t2, t3 = st.tabs([
-                    f"✅ Correctly flagged issues ({tp})",
-                    f"❌ Missed issues ({fn})",
-                    f"⚠️ False alarms ({fp})",
-                ])
-
+                t1, t2, t3 = st.tabs([f"Caught ({tp})", f" Missed ({fn})", f" False alarms ({fp})"])
                 with t1:
-                    correct = results[(y_true==1) & (y_pred==1)][OUTPUT_COLS]
-                    st.dataframe(correct.reset_index(drop=True), use_container_width=True)
-
+                    st.dataframe(results[(y_true==1) & (y_pred==1)][COLS].reset_index(drop=True),
+                                 use_container_width=True)
                 with t2:
                     if fn > 0:
-                        missed = results[(y_true==1) & (y_pred==0)][OUTPUT_COLS]
-                        st.dataframe(missed.reset_index(drop=True), use_container_width=True)
+                        st.dataframe(results[(y_true==1) & (y_pred==0)][COLS].reset_index(drop=True),
+                                     use_container_width=True)
                     else:
                         st.info("No missed issues.")
-
                 with t3:
-                    false_alarms = results[(y_true==0) & (y_pred==1)][OUTPUT_COLS].head(200)
-                    st.dataframe(false_alarms.reset_index(drop=True), use_container_width=True)
-                    if fp > 200:
-                        st.caption(f"Showing first 200 of {fp} false alarms.")
-
-                buf = BytesIO()
-                with pd.ExcelWriter(buf, engine="openpyxl") as writer:
-                    summary = pd.DataFrame([
-                        {"Metric": "Total logs",              "Value": len(df)},
-                        {"Metric": "True issues in month",    "Value": int(y_true.sum())},
-                        {"Metric": "Recall",                  "Value": recall},
-                        {"Metric": "Precision",               "Value": precision},
-                        {"Metric": "Correctly flagged (TP)",  "Value": tp},
-                        {"Metric": "Missed issues (FN)",      "Value": fn},
-                        {"Metric": "False alarms (FP)",       "Value": fp},
-                        {"Metric": "Correctly cleared (TN)",  "Value": tn},
-                    ])
-                    summary.to_excel(writer, sheet_name="Summary", index=False)
-                    results[(y_true==1) & (y_pred==0)][OUTPUT_COLS].to_excel(
-                        writer, sheet_name="MISSED ISSUES", index=False)
-                    results[(y_true==1) & (y_pred==1)][OUTPUT_COLS].to_excel(
-                        writer, sheet_name="Correctly flagged", index=False)
-                    results[(y_true==0) & (y_pred==1)][OUTPUT_COLS].to_excel(
-                        writer, sheet_name="False alarms", index=False)
-                    results[OUTPUT_COLS].to_excel(
-                        writer, sheet_name="All logs", index=False)
-
-                st.download_button(
-                    label="Download evaluation report",
-                    data=buf.getvalue(),
-                    file_name=f"{prefix}_evaluation.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
+                    st.dataframe(results[(y_true==0) & (y_pred==1)][COLS].head(100).reset_index(drop=True),
+                                 use_container_width=True)
 
             except Exception as e:
                 st.exception(e)

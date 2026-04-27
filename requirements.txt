@@ -1,9 +1,4 @@
-# Requirements
 pandas>=2.0
 openpyxl>=3.1
 rapidfuzz>=3.0
-scikit-learn>=1.3
-scipy>=1.11
-joblib>=1.3
-numpy>=1.24
-requests>=2.31   # optional — only needed for Stage 3 LLM (Ollama)
+streamlit>=1.30
