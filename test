@@ -1,0 +1,211 @@
+# Automated Elogbook Tool
+
+Every month we have 4,000–5,000 operator logs that consist of notes that operators leave regarding routine visits to the various facilities. This tool scans every log and identifies which logs indicate an operational issue which must be reported during the monthly operational status reports.
+
+---
+
+## Architecture
+
+Every log is processed in two stages:
+
+**Stage 1 — Keyword scan**
+Each log is checked against a list of ~46 keywords associated with operational issues. If any keyword is found the log is immediately flagged.
+
+**Stage 2 — ML classifier**
+Logs that didn't trigger a keyword are scored by a machine learning model (TF-IDF + Complement Naive Bayes). If the model's confidence score exceeds the threshold (default 0.15) the log is flagged. Otherwise it is cleared.
+
+The ML model must be trained once before use — see the **Train model** tab in the app.
+
+---
+
+## Performance
+
+Tested on Feb 2026 and Mar 2026 data:
+
+| Month | Total logs | Issues | Recall | Missed |
+|-------|-----------|--------|--------|--------|
+| Feb 2026 | 4,354 | 52 | 100% | 0 |
+| Mar 2026 | 4,958 | 45 | 100% | 0 |
+
+**Recall** = % of real issues the tool caught. Target is ≥ 87%.  
+**False positives** are expected — the tool intentionally over-flags. Reviewers see ~2,000 logs instead of 4,500+, and real issues are not missed.
+
+---
+
+## File structure
+
+```
+elogbook_triage/
+├── app.py            ← Streamlit web app (run this)
+├── pipeline.py       ← keyword list, ML logic, threshold (edit this to tune)
+├── model.pkl         ← trained model (created after first training run)
+└── requirements.txt
+```
+
+---
+
+## Setup
+
+In VS code terminal
+
+```bash
+# 1. Install dependencies 
+pip install streamlit pandas openpyxl rapidfuzz scikit-learn
+
+# 2. Run the app
+python -m streamlit run app.py
+```
+
+Opens at http://localhost:8501
+
+---
+
+## File naming convention
+
+Files must be named exactly as follows.
+
+| File | Format | Example |
+|------|--------|---------|
+| RAW export | `YYYY-MM RAW.xlsx` | `2026-04 RAW.xlsx` |
+| SORTED answer key | `YYYY-MM SORTED.xlsx` | `2026-04 SORTED.xlsx` |
+
+---
+
+## Using the app
+
+### Tab 1 — Run triage
+
+Use this every month to process a new RAW export.
+
+1. Upload a `YYYY-MM RAW.xlsx` file
+2. Click **Run triage**
+3. Click **Download sorted results**
+
+Output file: `YYYY-MM SORTED predicted.xlsx`  
+Contains one sheet — **Predicted Issues** — with every flagged log, sorted by site then date.
+
+Output columns:
+
+| Column | Description |
+|--------|-------------|
+| `EVENTDATE` | Date of the log entry |
+| `DESCRIPTION` | Site name |
+| `PERSONGROUP` | Operator group |
+| `LDTEXT` | Original log text |
+| `matched_keyword` | Keyword that triggered Stage 1 (blank if flagged by ML) |
+| `ml_probability` | ML model confidence score (0–1) |
+| `triage_stage` | Whether flagged by `keyword` or `ml` |
+
+---
+
+### Tab 2 — Train model
+
+Use this once at the start, and again whenever you want to improve the model with new months of data.
+
+1. Upload all your historical `YYYY-MM RAW.xlsx` files
+2. Upload all the corresponding `YYYY-MM SORTED.xlsx` answer keys
+3. Click **Train model**
+
+The model is saved as `model.pkl` next to `app.py` and used automatically by Tab 1.
+
+**When to retrain:** when you have accumulated several new months of manually curated SORTED files.
+
+---
+
+### Tab 3 — Evaluate
+
+Use this to check whether the tool is working correctly on a month you have already curated.
+
+1. Upload a `YYYY-MM RAW.xlsx` and its `YYYY-MM SORTED.xlsx`
+2. Click **Evaluate**
+
+Shows:
+- **Recall** — % of real issues caught (target ≥ 87%)
+- **Precision** — % of flags that were real issues
+- **Missed (FN)** — real issues the tool failed to flag
+- **False alarms (FP)** — routine logs incorrectly flagged
+
+Three tabs break down: correctly caught issues, missed issues, and false alarms.  
+Download the full evaluation report as Excel.
+
+---
+
+## Typical monthly workflow
+
+```
+First time only
+  Tab 2 → upload all historical RAW + SORTED pairs → Train model
+
+Every month
+  Tab 1 → upload new RAW export → download predicted issues
+
+Every few months
+  Tab 3 → check recall is still good on a recent curated month
+  Tab 2 → retrain if new SORTED files have been added
+```
+
+---
+
+## Tuning the keyword list
+
+Open `pipeline.py`. The `KEYWORDS` list at the top is the only thing you need to edit.
+
+```python
+KEYWORDS = [
+    # equipment
+    "oos", "fault", "alarm", ...
+
+    # add your new keyword here
+    "your new term",
+]
+```
+
+**To add a keyword** — append it and save. No retraining needed. Reload the browser tab.
+
+**To remove a noisy keyword** — delete it from the list.
+
+**Finding what to add** — run the Evaluate tab. The **Missed** tab shows every issue the tool failed to catch. Read those logs and add the phrase that should have triggered a flag.
+
+**Rule of thumb:** be specific. `"pump"` alone is too broad. `"pump fault"` or `"pump tripped"` is better.
+
+---
+
+## Tuning the ML threshold
+
+Open `pipeline.py` and change `THRESHOLD`:
+
+```python
+THRESHOLD = 0.15   # default
+```
+
+Lower → more logs flagged, fewer misses (more conservative)  
+Higher → fewer logs flagged, more misses (less conservative)
+
+Do not go above 0.30 without checking recall in the Evaluate tab first.
+
+---
+
+## RAW file format
+
+| Column | Description |
+|--------|-------------|
+| `LDTEXT` | Log entry text (free text) |
+| `EVENTDATE` | Date of the entry |
+| `DESCRIPTION` | Site name |
+| `PERSONGROUP` | Operator group |
+| `LOGBOOK_MONTH` | Month label |
+
+---
+
+## SORTED file format
+
+The SORTED xlsx is the manually curated answer key — the logs your team identified as real issues. Used in the Train model and Evaluate tabs.
+
+Single sheet named `Sheet1`. Four columns, no header row:
+
+| Col | Content |
+|-----|---------|
+| 0 | PERSONGROUP |
+| 1 | Site name |
+| 2 | Date |
+| 3 | Log text |
